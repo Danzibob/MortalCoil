@@ -41,7 +41,7 @@ class Board():
 		return list(s)
 
 	def getOrder(self,x,y):
-		return len(surround([x,y]))
+		return len(self.surround([x,y]))
 
 	def reset(self):
 		self.board = copy(self.originalBoard)
@@ -114,9 +114,9 @@ class Board():
 		l = []
 		for i in range(self.x):
 			for j in range(self.y):
-				l.append(self.order([i,j]))
-		return l.count(0) + l.count(1) > 1
-
+				if not self.get(i,j):
+					l.append(self.getOrder(i,j))
+		return l.count(0) + l.count(1) > 2
 
 	def undo(self):
 		target = self.undoStack.pop()
