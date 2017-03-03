@@ -22,8 +22,8 @@ def step(b,stack = []):
 	for d in dirs:
 		stack.append(d)
 		b.move(d)
-		split = b.checkSplit()
-		if split:
+		dead = b.checkDeadEnds()
+		if dead:
 			stack.pop()
 			b.undo()
 		else:
