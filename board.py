@@ -1,4 +1,5 @@
 from copy import deepcopy as copy
+import logging
 
 class Board():
 
@@ -10,6 +11,9 @@ class Board():
 		self.cur = None
 		self.undoStack = []
 		self.debug = False
+		self.originalStates, self.originalStateCounts = self.checkDeadEnds()
+		self.states = copy(self.originalStates)
+		self.stateCounts = copy(self.originalStateCounts)
 
 	def get(self,x,y):
 		if (-1 < x and x < self.x) and (-1 < y and y < self.y):
@@ -46,35 +50,57 @@ class Board():
 	def reset(self):
 		self.board = copy(self.originalBoard)
 		self.cur = None
+		self.states = copy(self.originalStates)
+		self.stateCounts = copy(self.originalStateCounts)
+		#logging.debug("RESETTING")
+		#printStates(self)
 
 	def start(self,x,y):
 		self.cur = [x,y]
 		self.set(x,y,True)
+		self.stateWall(x,y)
+		toCheck = [[x-1,y],[x+1,y],[x,y-1],[x,y+1]]
+		self.updateDeadEnds(toCheck)
 
 	def move(self,dir):
 		self.undoStack.append(self.cur)
 		x = self.cur[0]
 		y = self.cur[1]
-		broken = False
+		toCheck = []
+		self.set(x,y,True)
 		if(dir == "U"):
 			while(not self.get(x,y-1)):
-				self.set(x,y,True)
 				y -= 1
+				self.set(x,y,True)
+				self.stateWall(x,y)
+				toCheck.extend([[x-1,y],[x+1,y]])	
 		elif(dir == "D"):
 			while(not self.get(x,y+1)):				
-				self.set(x,y,True)
 				y += 1
+				self.set(x,y,True)
+				self.stateWall(x,y)
+				toCheck.extend([[x-1,y],[x+1,y]])
 		elif(dir == "L"):
 			while(not self.get(x-1,y)):
-				self.set(x,y,True)
 				x -= 1
+				self.set(x,y,True)
+				self.stateWall(x,y)
+				toCheck.extend([[x,y-1],[x,y+1]])
 		elif(dir == "R"):
 			while(not self.get(x+1,y)):
-				self.set(x,y,True)
 				x += 1
-		self.set(x,y,True)
+				self.set(x,y,True)
+				self.stateWall(x,y)
+				toCheck.extend([[x,y-1],[x,y+1]])
 		self.cur = [x,y]
-		return broken
+		self.updateDeadEnds(toCheck)
+		return self.stateCounts[0] + self.stateCounts[1] > 2
+
+	def stateWall(self,x,y):
+		currentState = self.states[x+y*self.x]
+		self.stateCounts[currentState] -= 1
+		self.stateCounts["X"] += 1
+		self.states[x+y*self.x] = "X"
 
 	def firstEmpty(self):
 		for i in range(self.x):
@@ -112,13 +138,34 @@ class Board():
 
 	def checkDeadEnds(self):
 		l = []
-		for i in range(self.x):
-			for j in range(self.y):
+		for j in range(self.y):
+			for i in range(self.x):
 				if not self.get(i,j):
 					l.append(self.getOrder(i,j))
-		return l.count(0) + l.count(1) > 2
+				else:
+					l.append("X")
+		c = {0:0,1:0,2:0,3:0,4:0,"X":0}
+		for key in c:
+			c[key] = l.count(key)
+		return l,c
+
+	def updateDeadEnds(self,toCheck):
+		if self.stateCounts[0] == 1 and self.stateCounts[1] == 0:
+			return
+		#logging.debug(self)
+		#printStates(self)
+		indexes = [x + self.x*y if not self.get(x,y) else None for x,y in toCheck]
+		for i in indexes:
+			if(i != None and self.states[i] != "X"):
+				self.stateCounts[self.states[i]] -= 1
+				self.states[i] -= 1
+				self.stateCounts[self.states[i]] += 1
+		#printStates(self)
 
 	def undo(self):
+		#logging.debug("================================================================")
+		#logging.debug("Resetting states after backtrack:")
+		#logging.debug(self)
 		target = self.undoStack.pop()
 		dx = self.cur[0] - target[0] 
 		dy = self.cur[1] - target[1]
@@ -140,6 +187,10 @@ class Board():
 				y += 1
 				dy += 1
 		self.cur = [x,y]
+		
+		self.states, self.stateCounts = self.checkDeadEnds()
+		#logging.debug(self)
+		#printStates(self)
 
 	def __str__(self):
 		return toString(self.board,self.cur)
@@ -159,4 +210,9 @@ def toString(board,current,stack = []):
 			index = 2*(i[0] + i[1]*len(board[0]))
 			s = s[:index] + "X" + s[index+1:]
 
-	return s[:-1]
+	return "\n" + s[:-1]
+
+def printStates(b):
+	for i in range(0,b.x*b.y,b.x):
+		logging.debug(" ".join(list(map(str,b.states[i:i+b.x]))))
+	logging.debug(b.stateCounts)

@@ -5,7 +5,8 @@ from random import random as random
 import logging
 from multiprocessing import Queue, Process, freeze_support
 from time import sleep
-logging.basicConfig(level=logging.DEBUG,format='[%(levelname)s] (%(processName)-10s) %(message)s',)
+logging.basicConfig(level=logging.DEBUG,format='[%(levelname)s] (%(processName)s) %(message)s',)
+NUM_THREADS = 4
 
 debug = False
 def findPath(b,toCheck):
@@ -29,6 +30,8 @@ def worker(board,q,out,end,ended):
 	logging.debug("Ending Thread")
 
 def step(b,stack = []):
+	#logging.debug(b)
+	#logging.debug("".join(stack))
 	dirs = b.surround()
 	if len(dirs) == 0:
 		if(b.full()):
@@ -37,45 +40,44 @@ def step(b,stack = []):
 			return False
 	for d in dirs:
 		stack.append(d)
-		b.move(d)
-		dead = b.checkDeadEnds()
-		if dead:
+		broken = b.move(d)
+		if broken:
+			#logging.debug("Halted by prevalence of dead ends")
 			stack.pop()
 			b.undo()
 		else:
 			r = step(b,stack)
-			if r :
+			if r:
 				return stack
-			else :
+			else:
+				#logging.debug("Halted because no paths")
 				stack.pop()
 				b.undo()
 	return False
 
 def cleanUp(threads,output,end,toCheck,ended):
-	for i in range(4):
+	while not toCheck.empty():
+		try:
+			toCheck.get(timeout=1)
+		except:
+			break
+	logging.debug("Cleared job-list\nWaiting for threads to end")
+	for i in range(NUM_THREADS):
 		threads[i].join()
-	#print("Cleaning up")
+	logging.debug("All threads seem to be finished")
+	for i in range(NUM_THREADS):
+		ended.get()
+		logging.debug("{} threads cleaned up".format(i+1))
 	while not output.empty():
 			try:
 				toCheck.get(timeout=1)
 			except:
 				break
-	#print("Cleared output")
 	while not end.empty():
 			try:
 				end.get(timeout=1)
 			except:
 				break
-	#print("Cleared end")
-	while not toCheck.empty():
-			try:
-				toCheck.get(timeout=1)
-			except:
-				break
-	#print("Cleared toCheck")
-	for i in range(4):
-		ended.get()
-		#print("{} threads cleaned up".format(i))
 
 def main():
 	while 1:
@@ -86,10 +88,10 @@ def main():
 		ended = Queue()
 		threads = []
 		board = getPuzzle()
-		for i in range(4):
+		for i in range(NUM_THREADS):
 			threads.append(Process(name="Thread "+str(i),target=worker,args = (board,toCheck,output,end,ended,)))
 		findPath(board,toCheck)
-		for i in range(4):
+		for i in range(NUM_THREADS):
 			threads[i].start()
 
 		o = output.get()
